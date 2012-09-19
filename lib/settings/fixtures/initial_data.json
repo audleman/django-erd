@@ -1,0 +1,10 @@
+[
+    {
+        "pk": 2,
+        "model": "settings.setting",
+        "fields": {
+            "name": "NEXT_LOLCAT",
+            "value": "1497"
+        }
+    }
+]
