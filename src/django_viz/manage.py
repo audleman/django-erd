@@ -12,7 +12,7 @@ if __name__ == "__main__":
     sys.path.insert(0, os.path.join(BASE_PATH, 'src'))
     sys.path.insert(0, SOURCE_PATH)
     
-    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "django_erd.settings")
+    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "django_viz.settings")
 
     from django.core.management import execute_from_command_line
 
