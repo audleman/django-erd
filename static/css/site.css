@@ -1,0 +1,83 @@
+/*********** LESS Rules **********************/
+
+/*.shadow(@x, @y, @spread){
+    -webkit-box-shadow: @x @y @spread rgba(0, 0, 0, 0.5);
+    -moz-box-shadow: @x @y @spread rgba(0, 0, 0, 0.5);
+    box-shadow: @x @y @spread rgba(0, 0, 0, 0.5);
+}
+
+.rounded(@ul, @ur, @br, @bl) {
+    -webkit-border-radius: @ul @ur @br @bl;
+    -moz-border-radius: @ul @ur @br @bl;
+    border-radius: @ul @ur @br @bl;
+}*/
+
+body, html, #container, #content {
+   height:100%
+}
+
+.btn-group + .btn-group {
+    margin: 0px;
+}
+
+#table-list-column {
+    background-color: #EEE;
+    height: 100%;
+    border: 1px solid #DDD;
+    padding: 0px 10px 10px 20px;
+}
+
+#table-list {
+    padding-left: 10px;
+}
+
+.btn-group > .btn:first-child  {
+    min-width: 125px;
+}
+
+
+.django-model {
+    margin-bottom: 1px;
+}
+
+.btn-group a.btn {
+    color: #ccc;
+}
+
+.btn-group a.btn-primary {
+    color: white;
+}
+
+.btn {
+    text-align: left;
+}
+
+.btn-group .btn i {
+    padding-right: 10px;
+}
+
+ul.nav li,
+ul.dropdown-menu li {
+    list-style-type: none;
+    padding: 0px;
+}
+
+.django-table-wrapper {
+    width: 155px;
+    border-radius: 4px;
+    border: 1px solid rgba(0, 0, 0, 0.0976563);
+    margin-bottom: 5px;
+}
+
+.django-table-wrapper ul {
+    margin-bottom: 0px;
+}
+
+.django-full-model .btn-group > .btn:first-child {
+    border-bottom-right-radius: 0px;
+    border-bottom-left-radius: 0px;
+}
+
+#canvas-wrapper {
+    padding: 10px 0px 0px 30px;
+}

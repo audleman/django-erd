@@ -1,0 +1,416 @@
+{% extends "admin/base_site.html" %}
+{% block css %}
+    <style type="text/css">
+        #content {
+            margin: 0px;
+        }
+
+        #footer {
+            padding: 0px;
+        }
+    </style>
+{% endblock %}
+
+{% block js %}
+    <script type="text/javascript" language="javascript">
+
+
+        
+
+        var canvasView, tableSelectorView, primaryNavigationView, all_models;
+        var sampleConnection;
+
+        $(document).ready(function() {
+
+
+            var oldSync = Backbone.sync;
+            Backbone.sync = function(method, model, options) {
+                options.beforeSend = function(xhr){
+                    xhr.setRequestHeader('X-CSRFToken', '{{ csrf_token }}');
+                };
+                return oldSync(method, model, options);
+            };
+
+            // Backbone.emulateHTTP = true;
+
+            /*
+             *  DjangoModel
+             */
+            var DjangoModel = Backbone.Model.extend({
+                defaults: {
+                    id: null,
+                    name: '',
+                    fields: '',
+                    selected: false,
+                    top: 0,
+                    left: 0,
+                    z: 2,
+                    foreign_keys: null
+                },
+
+                url: "{% url 'backbone:django_erd_modelrendersettings' %}",
+
+                initialize: function() {
+                    // Convert our field list string into a usable array
+                    this.set("field_list", this.get("fields").split(","));
+                    if (this.get("foreign_keys")){
+                        this.set("foreign_key_list", this.get("foreign_keys").split(","));
+                    } else {
+                        this.set("foreign_key_list", []);
+                    }
+
+                    if (this.get("name") == 'LogEntry'){
+                        this.set('foreign_keys', ['User']);
+                    }
+                    // this.bind("change:selected", function() {}
+                }
+            }); 
+
+            /*
+             *  DjangoModelCollection
+             */
+            var DjangoModelCollection = Backbone.Collection.extend({
+                model: DjangoModel,
+                url: "{% url 'backbone:django_erd_modelrendersettings' %}"
+            });
+
+
+            /*
+             *  DjangoModelView
+             */
+            var DjangoModelView = Backbone.View.extend({
+                tagName: "div",
+                className: "django-model",
+
+                initialize: function(){
+                    _.bindAll(this, 'modelChangeSelected');
+                    this.model.bind("change:selected", this.modelChangeSelected);
+                    this.render();
+                },
+
+                modelChangeSelected: function(){
+                    $(".btn-group .btn", this.el).toggleClass('btn-primary');
+                    console.log("Selected now: " + this.model.get("selected"))
+                },
+
+                events: {
+                    "click a": "clicked"
+                },
+                
+                clicked: function(e){
+                    // One way click -- will select but not deselect
+                    e.preventDefault();
+                    if (! this.model.get("selected")){
+                        this.model.set("selected", true );
+                        canvasView.collection.add(this.model);
+                    }
+                },
+
+                render: function(){
+                    var template = $("#django-model-template").html();
+                    var html = _.template(template, this.model.toJSON());
+                    $(this.el).html(html);
+
+                    // Toggle selected class
+                    if (this.model.get("selected")){
+                        $(".btn-group .btn", this.el).removeClass('btn-primary');
+                    } else {
+                    }
+                }  
+            });
+
+            /*
+             *  DjangoModelCanvasView
+             */
+            var DjangoModelFullView = Backbone.View.extend({
+                tagName: "div",
+                className: "django-full-model",
+
+                initialize: function(){
+                    this.render();
+                },
+
+                events: {
+                    "click a": "clicked",
+                    "dragstop": "dragStop",
+                    "click .icon-remove-sign": "removeModel",
+                },
+
+                removeModel: function(event){
+                    this.model.set("selected", false);
+                    canvasView.collection.remove(this.model);
+                    canvasView.updateConnections();
+                    this.remove();
+                },
+
+                dragStop: function(event, ui){
+                    var left = ui.position.left;
+                    var top = ui.position.top;
+                    this.model.set("top", top);
+                    this.model.set("left", left);
+                },
+                
+                clicked: function(event){
+                    event.preventDefault();
+                },
+
+                render: function(){
+                    var template = $("#django-full-model-template").html();
+                    var html = _.template(template, this.model.toJSON());
+                    $(this.el).html(html);
+                    
+                    // Set positioning classes
+                    $(this.el).css('left', this.model.get("left"));
+                    $(this.el).css('top', this.model.get("top"));
+                    $(this.el).attr('id', 
+                        'django-full-model-' + this.model.get("name").toLowerCase())
+                }  
+            });
+
+
+            /*
+             *  TableSelectorView
+             */
+            var TableSelectorView = Backbone.View.extend({  
+                el: $('#table-list'),
+                
+                initialize: function(){
+                    _.bindAll(this, 'render', 'renderItem');
+                    this.render();
+                },
+
+                renderItem: function(model){
+                    var modelView = new DjangoModelView({model: model});
+                    $(this.el).append(modelView.el);
+                    if (model.get("selected")){
+                        canvasView.collection.add(model);
+                    }
+                },
+
+                render: function(){
+                    this.collection.each(this.renderItem);
+                }
+
+            });
+
+            /*
+             *  CanvasView
+             */
+            var CanvasView = Backbone.View.extend({  
+                el: $('#canvas'),
+                
+                initialize: function(){
+                    _.bindAll(this, 'render', 'renderItem', 'addModel', 'removeModel', 'updateConnections');
+                    this.collection = new DjangoModelCollection();
+                    this.collection.bind('add', this.addModel); 
+                    this.collection.bind('remove', this.removeModel); 
+                    this.connections = {}
+                },
+
+                removeModel: function(model){ 
+                    this.updateConnections();
+                },
+
+                addModel: function(model){ 
+                    this.renderItem(model);
+                    foreign_keys = model.get("foreign_key_list");
+                    for (i = 0; i < foreign_keys.length; i++ ){
+                        console.log(foreign_keys[i].split(":"));
+                        fk_parts = foreign_keys[i].split(":");
+                        field_name = fk_parts[0];
+                        related_table_name = fk_parts[1];
+                        table_name = model.get("name");
+                        key = table_name + "-" + related_table_name;
+                        this.connections[key] = {
+                                 'source': {'htmlElement': 'django-full-model-' + table_name.toLowerCase(),
+                                            'endpoint': 'Rectangle',
+                                            'endpointstyles': { fillStyle:"#333" , width: 10, height: 10 },
+                                            'offsetField': field_name},
+                                 'destination':  {'htmlElement': 'django-full-model-' + related_table_name.toLowerCase(),
+                                                  'endpoint': 'Blank',
+                                                  'endpointstyles': {},
+                                                  'offsetField': 'id'},
+
+                                 'rendered': false }
+                    }
+                    this.updateConnections();
+                },
+
+                renderItem: function(model){
+                    var modelView = new DjangoModelFullView({model: model});
+                    $(this.el).append(modelView.el);
+                    jsPlumb.draggable($(modelView.el));
+                },
+
+                updateConnections: function(){
+                    jsPlumb.importDefaults({
+                        PaintStyle : {
+                            lineWidth:1,
+                            strokeStyle: '#333'
+                        },
+                        // Connector: [ "Flowchart", { stub:10 } ],
+                        Connector: "Straight",
+                    });
+                    var key;
+                    for (key in this.connections){
+                        tables = key.split("-")
+                        var source_model = this.collection.detect(function(model){
+                            return model.get('name') == tables[0];
+                        });
+                        var dest_model = this.collection.detect(function(model){
+                            return model.get('name') == tables[1];
+                        });
+                        // Both models are here and connection not yet rendered
+                        if (!(source_model && dest_model)){
+                            if (this.connections[key].rendered){
+                                jsPlumb.detach(this.connections[key].connection);
+                                this.connections[key].rendered = false;
+                                console.log("hopefully deleted" + key);
+                            }   
+                        }
+                        else if (source_model && dest_model && !this.connections[key].rendered){
+                            conn_vars = this.connections[key];
+
+                            // Determine offsets
+                            field_selector = '.field-' + conn_vars.source.offsetField;
+                            table_selector = '#' + conn_vars.source.htmlElement;
+                            console.log(($(field_selector, table_selector).height()/2));
+                            conn_vars.source.offset = (
+                                ($(field_selector, table_selector).offset().top - 
+                                $(table_selector).offset().top) +
+                                $(field_selector, table_selector).height()/2);
+                            field_selector = '.field-' + conn_vars.destination.offsetField;
+                            table_selector = '#' + conn_vars.destination.htmlElement;
+                            conn_vars.destination.offset = (
+                                ($(field_selector, table_selector).offset().top - 
+                                $(table_selector).offset().top) +
+                                ($(field_selector, table_selector).height()/2));
+
+                            var conn = jsPlumb.connect({
+                                        source: conn_vars.source.htmlElement,
+                                        target: conn_vars.destination.htmlElement,
+                                        anchors: [ [[1, 0, 1, 0, 0, conn_vars.source.offset], 
+                                                    [0, 0, -1, 0, 0, conn_vars.source.offset]],
+                                                   [[1, 0, 1, 0, 0, conn_vars.destination.offset], 
+                                                    [0, 0, -1, 0, 0, conn_vars.destination.offset]]
+                                                 ],
+                                        endpoints: [conn_vars.source.endpoint, conn_vars.destination.endpoint],
+                                        endpointStyles: [conn_vars.source.endpointstyles, 
+                                                         conn_vars.destination.endpointstyles]
+                                });
+                            sampleConnection = conn;
+                            this.connections[key].rendered = true;
+                            this.connections[key].connection = conn;
+                        } 
+                    }
+                    
+                },
+
+                render: function(){
+                    this.collection.each(this.renderItem);
+                }
+
+            });
+
+            /* 
+             *  Primary nav view
+             */
+            var PrimaryNavigationView = Backbone.View.extend({  
+                el: $('#primary-navigation'),
+
+                initialize: function(){
+                    _.bindAll(this, 'render');
+                    this.render();
+                },
+
+                events: {
+                    "click button#save": "save",
+                },
+
+                save: function() {
+                    all_models.each(function(model){
+                        model.save();
+                    })
+                },
+
+                render: function(){
+
+                    var template = $("#primary-navigation-template").html();
+                    var html = _.template(template);
+                    $(this.el).html(html);
+                }
+            });
+
+
+            /*
+             *  Variable declarations
+             */
+            all_models = new DjangoModelCollection();
+            all_models.fetch({success: function(){
+                    canvasView = new CanvasView();
+                    tableSelectorView = new TableSelectorView({collection: all_models}); 
+                }
+            });
+
+            // Primary page components
+            primaryNavigationView = new PrimaryNavigationView();
+        });
+
+    </script>
+{% endblock %}
+
+{% block templates %}
+
+    <script type="x-tmpl" id="primary-navigation-template">
+        <div class="navbar-inner">
+            <button type="button" class="btn" id="save">
+                <i class="icon-refresh icon"></i> Sync
+            </button>
+        </div>
+    </script>
+
+    <script type="x-tmpl" id="django-model-template">
+        <div class="django-table btn-group" id="django-table-<%=name%>">
+            <a class="btn btn-primary" href="#">
+                <i class="icon-circle-arrow-right icon-white"></i> <%=name%>
+            </a>
+        </div>
+    </script>
+
+    <script id="django-full-model-template" type="x-tmpl">
+        <div class="django-table-wrapper">
+            <div class="btn-group">
+                <a class="btn btn-primary"  href="#">
+                    <i class="icon-remove-sign icon-white"></i>
+                    <%=name%>
+                </a>
+            </div>
+             <ul class="">
+             <% for(var i = 0; i < field_list.length; i++){ %>
+                <li class="field-<%=field_list[i]%>"><%=field_list[i]%></li>
+            <% }; %>
+
+            </ul>
+        </div>
+    </script>
+{% endblock %}
+
+{% block content_title %}{% endblock %}
+
+{% block content %}
+<div class="row-fluid">
+    <div id="table-list-column" class="span3">
+        <h3>All Tables</h3>
+        <div id="table-list"></div>
+    </div>
+    <div class="span9" id="right">
+        <div id="primary-navigation"></div>
+        <div id="canvas-wrapper" class="">
+            <div id="canvas"></div>
+        </div>
+        <div class="clearfix"></div>
+    </div>
+    <div class="clearfix"></div>
+</div>
+<div class="clearfix"></div>
+{% endblock %}
